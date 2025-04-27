@@ -47,9 +47,14 @@ app.get('/:broadcastRoundId', async (req, res) => {
       });
 
       upstreamRes.body.on('error', (err) => {
-        console.error('Upstream stream error:', err);
+        if (err.name === 'AbortError') {
+          console.log(`Upstream for round ${broadcastRoundId} aborted normally.`);
+        } else {
+          console.error('Upstream stream error:', err);
+        }
+      
         broadcasts.delete(broadcastRoundId);
-
+      
         for (const client of clients) {
           client.end();
         }
@@ -87,4 +92,4 @@ app.get('/:broadcastRoundId', async (req, res) => {
   });
 });
 
-app.listen(process.env.PORT);
+app.listen(process.env.PORT || 5000);
