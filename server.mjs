@@ -33,7 +33,7 @@ app.get('/:broadcastRoundId', async (req, res) => {
         const text = chunk.toString();
 
         for (const client of clients) {
-          client.write(`data: ${text}\n\n`);
+          client.res.write(`data: ${text}\n\n`);
         }
       });
 
@@ -42,7 +42,8 @@ app.get('/:broadcastRoundId', async (req, res) => {
         broadcasts.delete(broadcastRoundId);
 
         for (const client of clients) {
-          client.end();
+          clearInterval(client.heartbeat);
+          client.res.end();
         }
       });
 
@@ -56,7 +57,8 @@ app.get('/:broadcastRoundId', async (req, res) => {
         broadcasts.delete(broadcastRoundId);
       
         for (const client of clients) {
-          client.end();
+          clearInterval(client.heartbeat);
+          client.res.end();
         }
       });
 
@@ -75,12 +77,10 @@ app.get('/:broadcastRoundId', async (req, res) => {
 
   const heartbeat = setInterval(() => {
     res.write(`: heartbeat\n\n`);
-  }, 60000)
+  }, 60000);
 
   const client = { res, heartbeat };
-  broadcast.clients.add(client);
-
-  broadcast.clients.add(res);
+  broadcast.clients.add(client); // <-- only add this, NOT `res` directly
 
   res.write(`: connected to round ${broadcastRoundId}\n\n`);
 
@@ -88,7 +88,7 @@ app.get('/:broadcastRoundId', async (req, res) => {
 
   req.on('close', () => {
     clearInterval(heartbeat);
-    broadcast.clients.delete(res);
+    broadcast.clients.delete(client); // <-- delete the {res, heartbeat} object
     console.log(`Client disconnected from round ${broadcastRoundId}. Remaining clients: ${broadcast.clients.size}`);
 
     if (broadcast.clients.size === 0) {
