@@ -1,7 +1,7 @@
 import express from 'express';
 import fetch from 'node-fetch';
-const app = express();
 
+const app = express();
 const broadcasts = new Map();
 
 app.get('/:broadcastRoundId', async (req, res) => {
@@ -32,8 +32,8 @@ app.get('/:broadcastRoundId', async (req, res) => {
       upstreamRes.body.on('data', (chunk) => {
         const text = chunk.toString();
 
-        for (const client of clients) {
-          client.res.write(`data: ${text}\n\n`);
+        for (const clientRes of clients) {
+          clientRes.write(`data: ${text}\n\n`);
         }
       });
 
@@ -41,9 +41,8 @@ app.get('/:broadcastRoundId', async (req, res) => {
         console.log(`Upstream closed for round ${broadcastRoundId}`);
         broadcasts.delete(broadcastRoundId);
 
-        for (const client of clients) {
-          clearInterval(client.heartbeat);
-          client.res.end();
+        for (const clientRes of clients) {
+          clientRes.end();
         }
       });
 
@@ -53,12 +52,11 @@ app.get('/:broadcastRoundId', async (req, res) => {
         } else {
           console.error('Upstream stream error:', err);
         }
-      
+
         broadcasts.delete(broadcastRoundId);
-      
-        for (const client of clients) {
-          clearInterval(client.heartbeat);
-          client.res.end();
+
+        for (const clientRes of clients) {
+          clientRes.end();
         }
       });
 
@@ -75,12 +73,11 @@ app.get('/:broadcastRoundId', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  broadcast.clients.add(res);
+
   const heartbeat = setInterval(() => {
     res.write(`: heartbeat\n\n`);
-  }, 60000);
-
-  const client = { res, heartbeat };
-  broadcast.clients.add(client); // <-- only add this, NOT `res` directly
+  }, 30000);
 
   res.write(`: connected to round ${broadcastRoundId}\n\n`);
 
@@ -88,7 +85,7 @@ app.get('/:broadcastRoundId', async (req, res) => {
 
   req.on('close', () => {
     clearInterval(heartbeat);
-    broadcast.clients.delete(client); // <-- delete the {res, heartbeat} object
+    broadcast.clients.delete(res);
     console.log(`Client disconnected from round ${broadcastRoundId}. Remaining clients: ${broadcast.clients.size}`);
 
     if (broadcast.clients.size === 0) {
