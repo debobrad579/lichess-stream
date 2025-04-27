@@ -73,6 +73,13 @@ app.get('/:broadcastRoundId', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  const heartbeat = setInterval(() => {
+    res.write(`: heartbeat\n\n`);
+  }, 60000)
+
+  const client = { res, heartbeat };
+  broadcast.clients.add(client);
+
   broadcast.clients.add(res);
 
   res.write(`: connected to round ${broadcastRoundId}\n\n`);
@@ -80,6 +87,7 @@ app.get('/:broadcastRoundId', async (req, res) => {
   console.log(`Client connected to round ${broadcastRoundId}. Total clients: ${broadcast.clients.size}`);
 
   req.on('close', () => {
+    clearInterval(heartbeat);
     broadcast.clients.delete(res);
     console.log(`Client disconnected from round ${broadcastRoundId}. Remaining clients: ${broadcast.clients.size}`);
 
