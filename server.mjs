@@ -29,6 +29,16 @@ app.get('/:broadcastRoundId', async (req, res) => {
 
       const clients = new Set();
 
+      const heartbeat = setInterval(() => {
+        for (const clientRes of clients) {
+          if (!clientRes.writableEnded) {
+            clientRes.write(`: heartbeat\n\n`);
+          } else {
+            clients.delete(clientRes);
+          }
+        }
+      }, 30000);
+
       upstreamRes.body.on('data', (chunk) => {
         const text = chunk.toString();
 
@@ -39,6 +49,7 @@ app.get('/:broadcastRoundId', async (req, res) => {
 
       upstreamRes.body.on('end', () => {
         console.log(`Upstream closed for round ${broadcastRoundId}`);
+        clearInterval(heartbeat);
         broadcasts.delete(broadcastRoundId);
 
         for (const clientRes of clients) {
@@ -53,6 +64,7 @@ app.get('/:broadcastRoundId', async (req, res) => {
           console.error('Upstream stream error:', err);
         }
 
+        clearInterval(heartbeat);
         broadcasts.delete(broadcastRoundId);
 
         for (const clientRes of clients) {
@@ -60,7 +72,7 @@ app.get('/:broadcastRoundId', async (req, res) => {
         }
       });
 
-      return { clients, abortController, upstreamRes };
+      return { clients, abortController, upstreamRes, heartbeat };
     })();
 
     broadcasts.set(broadcastRoundId, broadcastPromise);
@@ -75,21 +87,17 @@ app.get('/:broadcastRoundId', async (req, res) => {
 
   broadcast.clients.add(res);
 
-  const heartbeat = setInterval(() => {
-    res.write(`: heartbeat\n\n`);
-  }, 30000);
-
   res.write(`: connected to round ${broadcastRoundId}\n\n`);
 
   console.log(`Client connected to round ${broadcastRoundId}. Total clients: ${broadcast.clients.size}`);
 
   req.on('close', () => {
-    clearInterval(heartbeat);
     broadcast.clients.delete(res);
     console.log(`Client disconnected from round ${broadcastRoundId}. Remaining clients: ${broadcast.clients.size}`);
 
     if (broadcast.clients.size === 0) {
       console.log(`No clients left. Aborting upstream for round ${broadcastRoundId}`);
+      clearInterval(broadcast.heartbeat);
       broadcast.abortController.abort();
       broadcast.upstreamRes.body.destroy();
       broadcasts.delete(broadcastRoundId);
